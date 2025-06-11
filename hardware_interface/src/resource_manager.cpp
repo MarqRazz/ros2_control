@@ -361,7 +361,7 @@ public:
     return result;
   }
 
-  void remove_all_hardware_interfaces_from_available_list(const std::string & hardware_name)
+  void remove_all_command_interfaces_from_available_list(const std::string & hardware_name)
   {
     // remove all command interfaces from available list
     for (const auto & interface : hardware_info_map_[hardware_name].command_interfaces)
@@ -387,6 +387,10 @@ public:
           hardware_name.c_str(), interface.c_str());
       }
     }
+  }
+
+  void remove_all_state_interfaces_from_available_list(const std::string & hardware_name)
+  {
     // remove all state interfaces from available list
     for (const auto & interface : hardware_info_map_[hardware_name].state_interfaces)
     {
@@ -411,6 +415,12 @@ public:
           hardware_name.c_str(), interface.c_str());
       }
     }
+  }
+
+  void remove_all_hardware_interfaces_from_available_list(const std::string & hardware_name)
+  {
+    remove_all_command_interfaces_from_available_list(hardware_name);
+    remove_all_state_interfaces_from_available_list(hardware_name);
   }
 
   template <class HardwareT>
@@ -2319,6 +2329,8 @@ HardwareReadWriteStatus ResourceManager::read(
         rclcpp_lifecycle::State inactive_state(
           lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, lifecycle_state_names::INACTIVE);
         set_component_state(component_name, inactive_state);
+        // stop any command interfaces for this component
+        resource_storage_->remove_all_command_interfaces_from_available_list(component_name);
       }
       // If desired: automatic re-activation. We could add a flag for this...
       // else
@@ -2429,6 +2441,8 @@ HardwareReadWriteStatus ResourceManager::write(
         rclcpp_lifecycle::State inactive_state(
           lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, lifecycle_state_names::INACTIVE);
         set_component_state(component_name, inactive_state);
+        // stop any command interfaces for this component
+        resource_storage_->remove_all_command_interfaces_from_available_list(component_name);
       }
     }
   };
