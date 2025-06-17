@@ -347,7 +347,7 @@ public:
     return result;
   }
 
-  void remove_all_command_interfaces_from_available_list(const std::string & hardware_name)
+  void remove_all_hardware_interfaces_from_available_list(const std::string & hardware_name)
   {
     // remove all command interfaces from available list
     for (const auto & interface : hardware_info_map_[hardware_name].command_interfaces)
@@ -373,10 +373,6 @@ public:
           hardware_name.c_str(), interface.c_str());
       }
     }
-  }
-
-  void remove_all_state_interfaces_from_available_list(const std::string & hardware_name)
-  {
     // remove all state interfaces from available list
     for (const auto & interface : hardware_info_map_[hardware_name].state_interfaces)
     {
@@ -401,12 +397,6 @@ public:
           hardware_name.c_str(), interface.c_str());
       }
     }
-  }
-
-  void remove_all_hardware_interfaces_from_available_list(const std::string & hardware_name)
-  {
-    remove_all_command_interfaces_from_available_list(hardware_name);
-    remove_all_state_interfaces_from_available_list(hardware_name);
   }
 
   template <class HardwareT>
@@ -2228,7 +2218,7 @@ bool ResourceManager::enforce_command_limits(const rclcpp::Duration & period)
 HardwareReadWriteStatus ResourceManager::read(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & period)
 {
-  read_write_status.ok = true;
+  read_write_status.result = return_type::OK;
   read_write_status.failed_hardware_names.clear();
 
   // This is needed while we load and initialize the components
@@ -2306,7 +2296,7 @@ HardwareReadWriteStatus ResourceManager::read(
       if (ret_val == return_type::ERROR)
       {
         component.error();
-        read_write_status.ok = false;
+        read_write_status.result = ret_val;
         read_write_status.failed_hardware_names.push_back(component_name);
         resource_storage_->remove_all_hardware_interfaces_from_available_list(component_name);
       }
@@ -2315,16 +2305,9 @@ HardwareReadWriteStatus ResourceManager::read(
         rclcpp_lifecycle::State inactive_state(
           lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, lifecycle_state_names::INACTIVE);
         set_component_state(component_name, inactive_state);
-        // stop any command interfaces for this component
-        resource_storage_->remove_all_command_interfaces_from_available_list(component_name);
+        read_write_status.result = ret_val;
+        read_write_status.failed_hardware_names.push_back(component_name);
       }
-      // If desired: automatic re-activation. We could add a flag for this...
-      // else
-      // {
-      // using lifecycle_msgs::msg::State;
-      // rclcpp_lifecycle::State state(State::PRIMARY_STATE_ACTIVE, lifecycle_state_names::ACTIVE);
-      // set_component_state(component.get_name(), state);
-      // }
     }
   };
 
@@ -2339,7 +2322,7 @@ HardwareReadWriteStatus ResourceManager::read(
 HardwareReadWriteStatus ResourceManager::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & period)
 {
-  read_write_status.ok = true;
+  read_write_status.result = return_type::OK;
   read_write_status.failed_hardware_names.clear();
 
   // This is needed while we load and initialize the components
@@ -2418,7 +2401,7 @@ HardwareReadWriteStatus ResourceManager::write(
       if (ret_val == return_type::ERROR)
       {
         component.error();
-        read_write_status.ok = false;
+        read_write_status.result = ret_val;
         read_write_status.failed_hardware_names.push_back(component_name);
         resource_storage_->remove_all_hardware_interfaces_from_available_list(component_name);
       }
@@ -2427,8 +2410,8 @@ HardwareReadWriteStatus ResourceManager::write(
         rclcpp_lifecycle::State inactive_state(
           lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE, lifecycle_state_names::INACTIVE);
         set_component_state(component_name, inactive_state);
-        // stop any command interfaces for this component
-        resource_storage_->remove_all_command_interfaces_from_available_list(component_name);
+        read_write_status.result = ret_val;
+        read_write_status.failed_hardware_names.push_back(component_name);
       }
     }
   };

@@ -2663,9 +2663,9 @@ std::vector<std::string> ControllerManager::get_controller_names()
 void ControllerManager::read(const rclcpp::Time & time, const rclcpp::Duration & period)
 {
   periodicity_stats_.AddMeasurement(1.0 / period.seconds());
-  auto [ok, failed_hardware_names] = resource_manager_->read(time, period);
+  auto [result, failed_hardware_names] = resource_manager_->read(time, period);
 
-  if (!ok)
+  if (result == hardware_interface::return_type::ERROR)
   {
     rt_buffer_.deactivate_controllers_list.clear();
     // Determine controllers to stop
@@ -2690,6 +2690,40 @@ void ControllerManager::read(const rclcpp::Time & time, const rclcpp::Duration &
       rt_controller_list, {}, rt_buffer_.deactivate_controllers_list, "read");
     deactivate_controllers(rt_controller_list, rt_buffer_.deactivate_controllers_list);
     // TODO(destogl): do auto-start of broadcasters
+  }
+  else if (result == hardware_interface::return_type::DEACTIVATE)
+  {
+    rt_buffer_.deactivate_controllers_list.clear();
+    // Only stop controllers with active command interfaces to the failed_hardware_names
+    for (const auto & hardware_name : failed_hardware_names)
+    {
+      auto controllers = resource_manager_->get_cached_controllers_to_hardware(hardware_name);
+      for (const auto & controller : controllers)
+      {
+        // if this controller has any command interfaces to the failed hardware,
+        // add it to the deactivate_controllers_list
+        if (!resource_manager_->get_controller_reference_interface_names(controller).empty())
+        {
+          rt_buffer_.deactivate_controllers_list.push_back(controller);
+        }
+      }
+    }
+    RCLCPP_ERROR(
+      get_logger(),
+      "Deactivating following hardware components as their read cycle returned DEACTIVATE: [ "
+      "%s]",
+      rt_buffer_.get_concatenated_string(failed_hardware_names).c_str());
+    RCLCPP_ERROR_EXPRESSION(
+      get_logger(), !rt_buffer_.deactivate_controllers_list.empty(),
+      "Deactivating controllers [%s] as their command interfaces are tied to DEACTIVATEing "
+      "hardware components",
+      rt_buffer_.get_concatenated_string(rt_buffer_.deactivate_controllers_list).c_str());
+    std::vector<ControllerSpec> & rt_controller_list =
+      rt_controllers_wrapper_.update_and_get_used_by_rt_list();
+
+    perform_hardware_command_mode_change(
+      rt_controller_list, {}, rt_buffer_.deactivate_controllers_list, "write");
+    deactivate_controllers(rt_controller_list, rt_buffer_.deactivate_controllers_list);
   }
 }
 
@@ -2932,9 +2966,9 @@ controller_interface::return_type ControllerManager::update(
 
 void ControllerManager::write(const rclcpp::Time & time, const rclcpp::Duration & period)
 {
-  auto [ok, failed_hardware_names] = resource_manager_->write(time, period);
+  auto [result, failed_hardware_names] = resource_manager_->write(time, period);
 
-  if (!ok)
+  if (result == hardware_interface::return_type::ERROR)
   {
     rt_buffer_.deactivate_controllers_list.clear();
     // Determine controllers to stop
@@ -2961,6 +2995,40 @@ void ControllerManager::write(const rclcpp::Time & time, const rclcpp::Duration 
       rt_controller_list, {}, rt_buffer_.deactivate_controllers_list, "write");
     deactivate_controllers(rt_controller_list, rt_buffer_.deactivate_controllers_list);
     // TODO(destogl): do auto-start of broadcasters
+  }
+  else if (result == hardware_interface::return_type::DEACTIVATE)
+  {
+    rt_buffer_.deactivate_controllers_list.clear();
+    // Only stop controllers with active command interfaces to the failed_hardware_names
+    for (const auto & hardware_name : failed_hardware_names)
+    {
+      auto controllers = resource_manager_->get_cached_controllers_to_hardware(hardware_name);
+      for (const auto & controller : controllers)
+      {
+        // if this controller has any command interfaces to the failed hardware,
+        // add it to the deactivate_controllers_list
+        if (!resource_manager_->get_controller_reference_interface_names(controller).empty())
+        {
+          rt_buffer_.deactivate_controllers_list.push_back(controller);
+        }
+      }
+    }
+    RCLCPP_ERROR(
+      get_logger(),
+      "Deactivating following hardware components as their write cycle returned DEACTIVATE: [ "
+      "%s]",
+      rt_buffer_.get_concatenated_string(failed_hardware_names).c_str());
+    RCLCPP_ERROR_EXPRESSION(
+      get_logger(), !rt_buffer_.deactivate_controllers_list.empty(),
+      "Deactivating controllers [%s] as their command interfaces are tied to DEACTIVATEing "
+      "hardware components",
+      rt_buffer_.get_concatenated_string(rt_buffer_.deactivate_controllers_list).c_str());
+    std::vector<ControllerSpec> & rt_controller_list =
+      rt_controllers_wrapper_.update_and_get_used_by_rt_list();
+
+    perform_hardware_command_mode_change(
+      rt_controller_list, {}, rt_buffer_.deactivate_controllers_list, "write");
+    deactivate_controllers(rt_controller_list, rt_buffer_.deactivate_controllers_list);
   }
 }
 
