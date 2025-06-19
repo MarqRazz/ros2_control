@@ -2694,25 +2694,36 @@ void ControllerManager::read(const rclcpp::Time & time, const rclcpp::Duration &
   else if (result == hardware_interface::return_type::DEACTIVATE)
   {
     rt_buffer_.deactivate_controllers_list.clear();
+    auto loaded_controllers = get_loaded_controllers();
     // Only stop controllers with active command interfaces to the failed_hardware_names
     for (const auto & hardware_name : failed_hardware_names)
     {
       auto controllers = resource_manager_->get_cached_controllers_to_hardware(hardware_name);
       for (const auto & controller : controllers)
       {
-        // if this controller has any command interfaces to the failed hardware,
-        // add it to the deactivate_controllers_list
-        if (!resource_manager_->get_controller_reference_interface_names(controller).empty())
+        auto controller_spec = std::find_if(
+          loaded_controllers.begin(), loaded_controllers.end(),
+          [&](const controller_manager::ControllerSpec & spec)
+          { return spec.c->get_name() == controller; });
+        if (controller_spec == loaded_controllers.end())
         {
+          RCLCPP_WARN(
+            get_logger(), "Deactivate failed to find controller [%s] in loaded controllers.",
+            "This can happen due to multiple returns of 'DEACTIVATE' from [%s] read()",
+            controller.c_str());
+          continue;
+        }
+        std::vector<std::string> command_interface_names;
+        extract_command_interfaces_for_controller(
+          *controller_spec, resource_manager_, command_interface_names);
+        // if this controller has command interfaces add it to the deactivate_controllers_list
+        if (!command_interface_names.empty())
+        {
+          RCLCPP_ERROR(get_logger(), "Deactivating controller: [%s]", controller.c_str());
           rt_buffer_.deactivate_controllers_list.push_back(controller);
         }
       }
     }
-    RCLCPP_ERROR(
-      get_logger(),
-      "Deactivating following hardware components as their read cycle returned DEACTIVATE: [ "
-      "%s]",
-      rt_buffer_.get_concatenated_string(failed_hardware_names).c_str());
     RCLCPP_ERROR_EXPRESSION(
       get_logger(), !rt_buffer_.deactivate_controllers_list.empty(),
       "Deactivating controllers [%s] as their command interfaces are tied to DEACTIVATEing "
@@ -2999,25 +3010,36 @@ void ControllerManager::write(const rclcpp::Time & time, const rclcpp::Duration 
   else if (result == hardware_interface::return_type::DEACTIVATE)
   {
     rt_buffer_.deactivate_controllers_list.clear();
+    auto loaded_controllers = get_loaded_controllers();
     // Only stop controllers with active command interfaces to the failed_hardware_names
     for (const auto & hardware_name : failed_hardware_names)
     {
       auto controllers = resource_manager_->get_cached_controllers_to_hardware(hardware_name);
       for (const auto & controller : controllers)
       {
-        // if this controller has any command interfaces to the failed hardware,
-        // add it to the deactivate_controllers_list
-        if (!resource_manager_->get_controller_reference_interface_names(controller).empty())
+        auto controller_spec = std::find_if(
+          loaded_controllers.begin(), loaded_controllers.end(),
+          [&](const controller_manager::ControllerSpec & spec)
+          { return spec.c->get_name() == controller; });
+        if (controller_spec == loaded_controllers.end())
         {
+          RCLCPP_WARN(
+            get_logger(), "Deactivate failed to find controller [%s] in loaded controllers.",
+            "This can happen due to multiple returns of 'DEACTIVATE' from [%s] write()",
+            controller.c_str(), hardware_name.c_str());
+          continue;
+        }
+        std::vector<std::string> command_interface_names;
+        extract_command_interfaces_for_controller(
+          *controller_spec, resource_manager_, command_interface_names);
+        // if this controller has command interfaces add it to the deactivate_controllers_list
+        if (!command_interface_names.empty())
+        {
+          RCLCPP_ERROR(get_logger(), "Deactivating controller: [%s]", controller.c_str());
           rt_buffer_.deactivate_controllers_list.push_back(controller);
         }
       }
     }
-    RCLCPP_ERROR(
-      get_logger(),
-      "Deactivating following hardware components as their write cycle returned DEACTIVATE: [ "
-      "%s]",
-      rt_buffer_.get_concatenated_string(failed_hardware_names).c_str());
     RCLCPP_ERROR_EXPRESSION(
       get_logger(), !rt_buffer_.deactivate_controllers_list.empty(),
       "Deactivating controllers [%s] as their command interfaces are tied to DEACTIVATEing "
